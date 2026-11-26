@@ -14,11 +14,13 @@ import cofh.thermal.expansion.common.inventory.machine.MachineCrafterMenu;
 import cofh.thermal.lib.common.block.entity.MachineBlockEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.RegistryFriendlyByteBuf;
 import net.minecraft.world.entity.player.Inventory;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.inventory.AbstractContainerMenu;
 import net.minecraft.world.inventory.ResultContainer;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.crafting.CraftingInput;
 import net.minecraft.world.item.crafting.CraftingRecipe;
 import net.minecraft.world.item.crafting.RecipeHolder;
 import net.minecraft.world.item.crafting.RecipeType;
@@ -100,10 +102,11 @@ public class MachineCrafterBlockEntity extends MachineBlockEntity {
             craftMatrix.setItem(i, inventory.get(SLOT_CRAFTING_START + i));
         }
         RecipeHolder<CraftingRecipe> craftRecipe;
-        Optional<RecipeHolder<CraftingRecipe>> possibleRecipe = level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING, craftMatrix, level);
+        CraftingInput input = craftMatrix.asCraftInput();
+        Optional<RecipeHolder<CraftingRecipe>> possibleRecipe = level.getRecipeManager().getRecipeFor(RecipeType.CRAFTING, input, level);
         if (possibleRecipe.isPresent()) {
             craftRecipe = possibleRecipe.get();
-            craftResult.setItem(0, craftRecipe.value().assemble(craftMatrix, level.registryAccess()));
+            craftResult.setItem(0, craftRecipe.value().assemble(input, level.registryAccess()));
         } else {
             craftRecipe = null;
             craftResult.setItem(0, ItemStack.EMPTY);
@@ -179,7 +182,7 @@ public class MachineCrafterBlockEntity extends MachineBlockEntity {
         }
         FluidStack prevFluid = renderFluid;
         if (!fluidInputCounts.isEmpty() && fluidInputCounts.get(0) > 0) {
-            renderFluid = new FluidStack(inputTank.getFluidStack(), BUCKET_VOLUME);
+            renderFluid = inputTank.getFluidStack().copyWithAmount(BUCKET_VOLUME);
         } else {
             renderFluid = FluidStack.EMPTY;
         }
@@ -240,9 +243,10 @@ public class MachineCrafterBlockEntity extends MachineBlockEntity {
     public FriendlyByteBuf getConfigPacket(FriendlyByteBuf buffer) {
 
         super.getConfigPacket(buffer);
+        var registryBuffer = new RegistryFriendlyByteBuf(buffer, level.registryAccess());
 
         for (int i = SLOT_CRAFTING_START; i < SLOT_CRAFTING_START + 9; ++i) {
-            buffer.writeItem(inventory.getStackInSlot(i));
+            ItemStack.OPTIONAL_STREAM_CODEC.encode(registryBuffer, inventory.getStackInSlot(i));
         }
         return buffer;
     }
@@ -251,9 +255,10 @@ public class MachineCrafterBlockEntity extends MachineBlockEntity {
     public void handleConfigPacket(FriendlyByteBuf buffer) {
 
         super.handleConfigPacket(buffer);
+        var registryBuffer = new RegistryFriendlyByteBuf(buffer, level.registryAccess());
 
         for (int i = SLOT_CRAFTING_START; i < SLOT_CRAFTING_START + 9; ++i) {
-            inventory.set(i, buffer.readItem());
+            inventory.set(i, ItemStack.OPTIONAL_STREAM_CODEC.decode(registryBuffer));
         }
         setRecipe();
         markChunkUnsaved();
@@ -261,7 +266,7 @@ public class MachineCrafterBlockEntity extends MachineBlockEntity {
 
     // GUI
     @Override
-    public FriendlyByteBuf getGuiPacket(FriendlyByteBuf buffer) {
+    public RegistryFriendlyByteBuf getGuiPacket(RegistryFriendlyByteBuf buffer) {
 
         super.getGuiPacket(buffer);
 
@@ -274,15 +279,17 @@ public class MachineCrafterBlockEntity extends MachineBlockEntity {
     }
 
     @Override
-    public void handleGuiPacket(FriendlyByteBuf buffer) {
+    public void handleGuiPacket(RegistryFriendlyByteBuf buffer) {
 
         super.handleGuiPacket(buffer);
 
-        if (buffer.readBoolean() && level != null) {
-            Optional<RecipeHolder<?>> possibleRecipe = level.getRecipeManager().byKey(buffer.readResourceLocation());
-            possibleRecipe.ifPresent(recipe -> curRecipe = CrafterRecipeManager.instance().getRecipe(recipe, level.registryAccess()));
-        } else {
-            curRecipe = null;
+        curRecipe = null;
+        if (buffer.readBoolean()) {
+            var recipeId = buffer.readResourceLocation();
+            if (level != null) {
+                level.getRecipeManager().byKey(recipeId)
+                        .ifPresent(recipe -> curRecipe = CrafterRecipeManager.instance().getRecipe(recipe, level.registryAccess()));
+            }
         }
     }
     // endregion

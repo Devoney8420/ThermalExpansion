@@ -2,13 +2,13 @@ package cofh.thermal.expansion.common.block.entity.machine;
 
 import cofh.lib.client.sounds.ConditionalSoundInstance;
 import cofh.lib.common.inventory.ItemStorageCoFH;
-import cofh.lib.util.helpers.MathHelper;
 import cofh.thermal.core.common.config.ThermalCoreConfig;
 import cofh.thermal.core.common.item.SlotSealItem;
 import cofh.thermal.core.util.managers.machine.PulverizerRecipeManager;
 import cofh.thermal.expansion.common.inventory.machine.MachinePulverizerMenu;
 import cofh.thermal.lib.common.block.entity.MachineBlockEntity;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.entity.player.Inventory;
@@ -80,8 +80,10 @@ public class MachinePulverizerBlockEntity extends MachineBlockEntity {
         int decrement = itemInputCounts.size() > 1 ? itemInputCounts.get(1) : 0;
         if (decrement > 0) {
             if (catalystSlot.getItemStack().isDamageableItem()) {
-                if (catalystSlot.getItemStack().hurt(decrement, MathHelper.RANDOM, null)) {
-                    catalystSlot.modify(-1);
+                if (level instanceof ServerLevel serverLevel) {
+                    ItemStack catalyst = catalystSlot.getItemStack().copy();
+                    catalyst.hurtAndBreak(decrement, serverLevel, null, item -> {});
+                    catalystSlot.setItemStack(catalyst);
                 }
             } else {
                 catalystSlot.modify(-decrement);

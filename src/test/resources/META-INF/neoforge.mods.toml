@@ -1,0 +1,15 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "CoFH - Don't Be a Jerk (Learn, Don't Steal)"
+
+[[mods]]
+modId = "thermal_expansion_tests"
+version = "1"
+displayName = "Thermal Expansion Tests"
+
+[[dependencies.thermal_expansion_tests]]
+modId = "thermal_expansion"
+type = "required"
+versionRange = "[11.0.2,11.1.0)"
+ordering = "AFTER"
+side = "BOTH"
